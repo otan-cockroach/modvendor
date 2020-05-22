@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	flags       = flag.NewFlagSet("modvendor", flag.ExitOnError)
-	copyPatFlag = flags.String("copy", "", "copy files matching glob pattern to ./vendor/ (ie. modvendor -copy=\"**/*.c **/*.h **/*.proto\")")
-	verboseFlag = flags.Bool("v", false, "verbose output")
+	flags              = flag.NewFlagSet("modvendor", flag.ExitOnError)
+	copyPatFlag        = flags.String("copy", "", "copy files matching glob pattern to ./vendor/ (ie. modvendor -copy=\"**/*.c **/*.h **/*.proto\")")
+	verboseFlag        = flags.Bool("v", false, "verbose output")
+	injectPackagesFlag = flags.String("inject", "", "inject new directories to copy into ./vendor")
 )
 
 type Mod struct {
@@ -62,6 +63,13 @@ func main() {
 	scanner := bufio.NewScanner(f)
 	scanner.Split(bufio.ScanLines)
 
+	injectionsByModule := map[string][]string{}
+	for _, moduleToInjection := range strings.Split(*injectPackagesFlag, ",") {
+		moduleToInjectionComponents := strings.Split(moduleToInjection, ":")
+		module, pkg := moduleToInjectionComponents[0], moduleToInjectionComponents[1]
+		injectionsByModule[module] = append(injectionsByModule[module], pkg)
+	}
+
 	var mod *Mod
 	modules := []*Mod{}
 
@@ -99,6 +107,8 @@ func main() {
 
 			// Build list of files to module path source to project vendor folder
 			mod.VendorList = buildModVendorList(copyPat, mod)
+			// Append packages we need to also include, which may not be in vendor/modules.txt.
+			mod.Pkgs = append(mod.Pkgs, injectionsByModule[mod.ImportPath]...)
 
 			modules = append(modules, mod)
 
